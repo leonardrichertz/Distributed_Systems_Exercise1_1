@@ -12,22 +12,18 @@ MULTICAST_PORT_FIREWORKS = 5007
 MULTICAST_PORT_ROUND_TIMES = 5008
 BUFFER_SIZE = 1024
 
-ROUNDS_WITHOUT_FIREWORK = 0  # Global counter
-COUNTER_LOCK = threading.Lock()  # Thread-safe counter access
 
-
-def send_token(next_host, next_port, token):
+def send_token(next_ip, next_port, token):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     round_start = time.time()
     round_duration = round_start - token["timestamp"]
     token["timestamp"] = round_start
 
-    # Send the stats via multicast
     message = json.dumps({"type": "round_time", "duration": round_duration})
     sock.sendto(
         message.encode(), (MULTICAST_GROUP_ROUND_TIMES, MULTICAST_PORT_ROUND_TIMES)
     )
-    sock.sendto(json.dumps(token).encode(), (next_host, next_port))
+    sock.sendto(json.dumps(token).encode(), (next_ip, next_port))
 
 
 def multicast_firework(process_id, round_number):
@@ -38,7 +34,6 @@ def multicast_firework(process_id, round_number):
 
 
 def listen_multicast():
-    global ROUNDS_WITHOUT_FIREWORK
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("", MULTICAST_PORT_FIREWORKS))
@@ -48,31 +43,25 @@ def listen_multicast():
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
     def receive():
-        global ROUNDS_WITHOUT_FIREWORK
         while True:
             data, _ = sock.recvfrom(BUFFER_SIZE)
             print("[Multicast] Received:", data.decode())
-            message = data.decode()
-            print("[Multicast] Received:", message)
-            if "Firework from" in message:
-                with COUNTER_LOCK:
-                    ROUNDS_WITHOUT_FIREWORK = 0
 
     threading.Thread(target=receive, daemon=True).start()
 
 
 def main(args):
-    global ROUNDS_WITHOUT_FIREWORK
     print(
         f"[Process {args.id}] Starting with initial probability {args.initial_p} and k = {args.k}"
     )
     try:
         listen_multicast()
         probability = args.initial_p
+        rounds_without_firework = 0
         total_rounds = 0
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("localhost", args.port))
+        sock.bind((args.ip, args.port))
 
         print(
             f"[Process {args.id}] Started on port {args.port}, next = {args.next_port}"
@@ -85,7 +74,7 @@ def main(args):
                 print(
                     f"[Process {args.id}] Received token with silent rounds >= k, terminating."
                 )
-                send_token("localhost", args.next_port, token)
+                send_token(args.next_ip, args.next_port, token)
                 break
             total_rounds += 1
             print(f"[Process {args.id}] Received token in round {token['round']}")
@@ -93,26 +82,21 @@ def main(args):
             if random.random() < probability:
                 print(f"[Process {args.id}] FIREWORK!")
                 multicast_firework(args.id, token["round"])
-                with COUNTER_LOCK:
-                    ROUNDS_WITHOUT_FIREWORK = 0
+                rounds_without_firework = 0
             else:
-                with COUNTER_LOCK:
-                    ROUNDS_WITHOUT_FIREWORK += 1
+                rounds_without_firework += 1
 
             probability /= 2
             token["round"] += 1
 
-            with COUNTER_LOCK:
-                if ROUNDS_WITHOUT_FIREWORK >= args.k:
-                    print(
-                        f"[Process {args.id}] Terminating after {token['round']} rounds"
-                    )
-                    token["silent_rounds"] = ROUNDS_WITHOUT_FIREWORK
-                    send_token("localhost", args.next_port, token)
-                    break
+            if rounds_without_firework >= args.k:
+                print(f"[Process {args.id}] Terminating after {token['round']} rounds")
+                token["silent_rounds"] = rounds_without_firework
+                send_token(args.next_ip, args.next_port, token)
+                break
 
             time.sleep(0.1)
-            send_token("localhost", args.next_port, token)
+            send_token(args.next_ip, args.next_port, token)
 
     finally:
         sock.close()
@@ -123,6 +107,8 @@ if __name__ == "__main__":
     print("Starting process...")
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", type=int, required=True)
+    parser.add_argument("--ip", type=str, required=True)  # own IP
+    parser.add_argument("--next_ip", type=str, required=True)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--next_port", type=int, required=True)
     parser.add_argument("--initial_p", type=float, default=0.5)
