@@ -82,9 +82,24 @@ def main(args):
             f"[Process {args.id}] Started on port {port}, next = {next_port} sending to PC with ip-address {args.next_host}"
         )
 
+        # We can manually start the first token by sending it to the first process
+        if args.inject_token:
+            print(f"[Process {args.id}] Injecting initial token...")
+            time.sleep(1)  # Give next process time to start
+            initial_token = {
+                "id": args.id,
+                "timestamp": time.time(),
+                "round": 0,
+                "silent_rounds": 0,
+                "sender": args.id,
+            }
+            send_token(args.next_host, next_port, initial_token)
+
         while True:
+            print(f"[Process {args.id}] Waiting to receive token...")
             data, _ = sock.recvfrom(BUFFER_SIZE)
             token = json.loads(data.decode())
+            print(f"[Process {args.id}] Received token in round {token['round']}")
             if token.get("silent_rounds") and token["silent_rounds"] >= args.k:
                 print(
                     f"[Process {args.id}] Received token with silent rounds >= k, terminating."
@@ -132,4 +147,9 @@ if __name__ == "__main__":
     parser.add_argument("--next_port", type=int, default=None)
     parser.add_argument("--initial_p", type=float, default=0.5)
     parser.add_argument("--k", type=int, default=5)
+    parser.add_argument(
+        "--inject_token",
+        action="store_true",
+        help="Inject the initial token into the ring",
+    )
     main(parser.parse_args())
