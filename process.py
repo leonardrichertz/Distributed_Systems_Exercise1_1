@@ -14,6 +14,7 @@ BUFFER_SIZE = 1024
 
 ROUNDS_WITHOUT_FIREWORK = 0  # Global counter
 COUNTER_LOCK = threading.Lock()  # Thread-safe counter access
+DEFAULT_PORT = 5000
 
 
 def send_token(next_host, next_port, token):
@@ -71,12 +72,13 @@ def main(args):
         probability = args.initial_p
         total_rounds = 0
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind((args.ip or "localhost", args.port))
+        port = args.port if args.port else DEFAULT_PORT
+        next_port = args.next_port if args.next_port else DEFAULT_PORT
 
-        print(
-            f"[Process {args.id}] Started on port {args.port}, next = {args.next_port}"
-        )
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("0.0.0.0", port))  # Listen on all interfaces
+
+        print(f"[Process {args.id}] Started on port {port}, next = {next_port}")
 
         while True:
             data, _ = sock.recvfrom(BUFFER_SIZE)
@@ -85,7 +87,7 @@ def main(args):
                 print(
                     f"[Process {args.id}] Received token with silent rounds >= k, terminating."
                 )
-                send_token(args.next_ip or "localhost", args.next_port, token)
+                send_token(args.next_host, next_port, token)
                 break
             total_rounds += 1
             print(f"[Process {args.id}] Received token in round {token['round']}")
@@ -108,11 +110,11 @@ def main(args):
                         f"[Process {args.id}] Terminating after {token['round']} rounds"
                     )
                     token["silent_rounds"] = ROUNDS_WITHOUT_FIREWORK
-                    send_token(args.next_ip or "localhost", args.next_port, token)
+                    send_token(args.next_host, next_port, token)
                     break
 
             time.sleep(0.1)
-            send_token(args.next_ip or "localhost", args.next_port, token)
+            send_token(args.next_host, next_port, token)
 
     finally:
         sock.close()
@@ -123,10 +125,9 @@ if __name__ == "__main__":
     print("Starting process...")
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", type=int, required=True)
-    parser.add_argument("--ip", type=str, default=None)
-    parser.add_argument("--next_ip", type=str, default=None)
-    parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--next_port", type=int, required=True)
+    parser.add_argument("--next_host", type=str, default="localhost")
+    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--next_port", type=int, default=None)
     parser.add_argument("--initial_p", type=float, default=0.5)
     parser.add_argument("--k", type=int, default=5)
     main(parser.parse_args())
