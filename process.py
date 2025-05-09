@@ -78,7 +78,9 @@ def main(args):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(("0.0.0.0", port))  # Listen on all interfaces
 
-        print(f"[Process {args.id}] Started on port {port}, next = {next_port}")
+        print(
+            f"[Process {args.id}] Started on port {port}, next = {next_port} sending to PC with ip-address {args.next_host}"
+        )
 
         while True:
             data, _ = sock.recvfrom(BUFFER_SIZE)
