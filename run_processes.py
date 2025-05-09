@@ -38,7 +38,7 @@ def run_ring(n, initial_p, k):
     # Start the first token
         import socket, json
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        token = {'round': 0, 'silent_rounds': 0}
+        token = {'round': 0, 'silent_rounds': 0, 'timestamp': time.time()}
         sock.sendto(json.dumps(token).encode(), ('localhost', BASE_PORT))
 
         for proc in processes:
