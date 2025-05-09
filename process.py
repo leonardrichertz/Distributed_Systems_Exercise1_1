@@ -72,7 +72,7 @@ def main(args):
         total_rounds = 0
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("localhost", args.port))
+        sock.bind((args.ip or "localhost", args.port))
 
         print(
             f"[Process {args.id}] Started on port {args.port}, next = {args.next_port}"
@@ -85,7 +85,7 @@ def main(args):
                 print(
                     f"[Process {args.id}] Received token with silent rounds >= k, terminating."
                 )
-                send_token("localhost", args.next_port, token)
+                send_token(args.next_ip or "localhost", args.next_port, token)
                 break
             total_rounds += 1
             print(f"[Process {args.id}] Received token in round {token['round']}")
@@ -108,11 +108,11 @@ def main(args):
                         f"[Process {args.id}] Terminating after {token['round']} rounds"
                     )
                     token["silent_rounds"] = ROUNDS_WITHOUT_FIREWORK
-                    send_token("localhost", args.next_port, token)
+                    send_token(args.next_ip or "localhost", args.next_port, token)
                     break
 
             time.sleep(0.1)
-            send_token("localhost", args.next_port, token)
+            send_token(args.next_ip or "localhost", args.next_port, token)
 
     finally:
         sock.close()
@@ -123,6 +123,8 @@ if __name__ == "__main__":
     print("Starting process...")
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", type=int, required=True)
+    parser.add_argument("--ip", type=str, default=None)
+    parser.add_argument("--next_ip", type=str, default=None)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--next_port", type=int, required=True)
     parser.add_argument("--initial_p", type=float, default=0.5)
