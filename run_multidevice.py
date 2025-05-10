@@ -6,6 +6,8 @@ import threading
 import sys
 import select
 import argparse
+from statistics import mean
+import csv
 
 MULTICAST_GROUP_FIREWORKS = "224.0.0.1"
 MULTICAST_GROUP_ROUND_TIMES = "224.1.1.1"
@@ -13,9 +15,10 @@ MULTICAST_PORT_FIREWORKS = 5007
 MULTICAST_PORT_ROUND_TIMES = 5008
 BASE_PORT = 5000
 MAX_WAIT_TIME = 60
+CSV_FILE = "multidevice_experiment_results.csv"
 
 
-def listen_for_multicasts(stop_event):
+def listen_for_multicasts(stop_event, round_times, multicast_count):
     # Listen for round time messages
     sock_round_time = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_round_time.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -64,11 +67,24 @@ def listen_for_multicasts(stop_event):
     sock_firework.close()
 
 
+def writeStats(results):
+    fieldnames = ["n", "rounds", "multicasts", "min_time", "max_time", "avg_time"]
+    with open(CSV_FILE, mode="w", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=",")
+        writer.writeheader()
+        writer.writerow(results)
+
+
 def run_single_ring(args):
     processes = []
+    round_times = []
+    multicast_count = [0]
 
     stop_event = threading.Event()
-    listener = threading.Thread(target=listen_for_multicasts, args=(stop_event,))
+    listener = threading.Thread(
+        target=listen_for_multicasts, args=(stop_event, round_times, multicast_count)
+    )
+
     listener.start()
 
     try:
@@ -88,8 +104,24 @@ def run_single_ring(args):
 
         time.sleep(2)  # Let the process start
 
-        # Wait for the listener to capture multicasts
-        time.sleep(MAX_WAIT_TIME)
+        if round_times:
+            results = {
+                "n": 2,  # Assuming 2 machines in the ring.
+                "rounds": len(round_times),
+                "multicasts": multicast_count[0],
+                "min_time": min(round_times),
+                "max_time": max(round_times),
+                "avg_time": mean(round_times),
+            }
+            print("\nExperiment Results:")
+            for key, value in results.items():
+                print(f"{key}: {value}")
+
+            # Write results to CSV
+            writeStats(results)
+
+        else:
+            return None
 
     except Exception as e:
         print(f"Error: {e}")

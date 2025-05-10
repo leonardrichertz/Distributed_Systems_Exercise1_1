@@ -118,6 +118,7 @@ def main(args):
                 with COUNTER_LOCK:
                     ROUNDS_WITHOUT_FIREWORK += 1
 
+            print(f"[Process {args.id}] silent rounds {ROUNDS_WITHOUT_FIREWORK}")
             probability /= 2
             token["round"] += 1
 
