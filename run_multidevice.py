@@ -53,10 +53,13 @@ def listen_for_multicasts(stop_event, round_times, multicast_count):
                     message = json.loads(message)
                     if message.get("type") == "round_time":
                         print(f"Round Time: {message['duration']:.6f} seconds")
+                        round_times.append(message["duration"])
+
                 elif ready_sock == sock_firework:
                     # Firework message
                     if "Firework from" in message:
                         print(message)
+                        multicast_count[0] += 1
 
         except socket.timeout:
             continue
@@ -104,6 +107,10 @@ def run_single_ring(args):
 
         time.sleep(2)  # Let the process start
 
+        # Wait for the listener to capture multicasts
+        # time.sleep(MAX_WAIT_TIME)
+        print("multicast_count:", multicast_count[0])
+        print("round_times:", round_times)
         if round_times:
             results = {
                 "n": 2,  # Assuming 2 machines in the ring.

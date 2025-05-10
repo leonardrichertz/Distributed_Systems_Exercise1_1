@@ -15,6 +15,7 @@ BUFFER_SIZE = 1024
 ROUNDS_WITHOUT_FIREWORK = 0  # Global counter
 COUNTER_LOCK = threading.Lock()  # Thread-safe counter access
 DEFAULT_PORT = 5000
+TOKEN_TIMEOUT = 30
 
 
 def send_token(next_host, next_port, token):
@@ -77,6 +78,7 @@ def main(args):
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(("0.0.0.0", port))  # Listen on all interfaces
+        sock.settimeout(TOKEN_TIMEOUT)  # Set a timeout for receiving tokens
 
         print(
             f"[Process {args.id}] Started on port {port}, next = {next_port} sending to PC with ip-address {args.next_host}"
