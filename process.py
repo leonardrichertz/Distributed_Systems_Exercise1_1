@@ -20,15 +20,15 @@ TOKEN_TIMEOUT = 30
 
 def send_token(next_host, next_port, token):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    round_start = time.time()
-    round_duration = round_start - token["timestamp"]
-    token["timestamp"] = round_start
+    current_time = time.time()
+    round_duration = max(0, current_time - token["timestamp"])
 
     # Send the stats via multicast
     message = json.dumps({"type": "round_time", "duration": round_duration})
     sock.sendto(
         message.encode(), (MULTICAST_GROUP_ROUND_TIMES, MULTICAST_PORT_ROUND_TIMES)
     )
+    token["timestamp"] = current_time
     sock.sendto(json.dumps(token).encode(), (next_host, next_port))
 
 

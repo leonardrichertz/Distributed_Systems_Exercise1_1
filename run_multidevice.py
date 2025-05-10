@@ -79,7 +79,6 @@ def writeStats(results):
 
 
 def run_single_ring(args):
-    processes = []
     round_times = []
     multicast_count = [0]
 
@@ -103,44 +102,53 @@ def run_single_ring(args):
                 "--inject_token",
             ]
         )
-        processes.append(proc)
+
+        start_time = time.time()
+        while proc.poll() is None:
+            if time.time() - start_time > MAX_WAIT_TIME:
+                print("Process timed out")
+                proc.terminate()
+                break
+            time.sleep(1)
 
         time.sleep(2)  # Let the process start
 
-        # Wait for the listener to capture multicasts
-        # time.sleep(MAX_WAIT_TIME)
         print("multicast_count:", multicast_count[0])
         print("round_times:", round_times)
-        if round_times:
-            results = {
-                "n": 2,  # Assuming 2 machines in the ring.
-                "rounds": len(round_times),
-                "multicasts": multicast_count[0],
-                "min_time": min(round_times),
-                "max_time": max(round_times),
-                "avg_time": mean(round_times),
-            }
-            print("\nExperiment Results:")
-            for key, value in results.items():
-                print(f"{key}: {value}")
-
-            # Write results to CSV
-            writeStats(results)
-
+        if proc.returncode == 0:
+            print("Process completed successfully")
+            if round_times:
+                results = {
+                    "n": 2,  # Assuming 2 machines in the ring
+                    "rounds": len(round_times),
+                    "multicasts": multicast_count[0],
+                    "min_time": min(round_times),
+                    "max_time": max(round_times),
+                    "avg_time": mean(round_times),
+                }
+                print("\nExperiment Results:")
+                for key, value in results.items():
+                    print(f"{key}: {value}")
+                writeStats(results)
+            else:
+                print("No data collected")
+                return None
         else:
+            print(f"Process failed with return code {proc.returncode}")
             return None
 
     except Exception as e:
         print(f"Error: {e}")
+        return None
 
     finally:
         # Cleanup
         stop_event.set()
         listener.join()
 
-        for proc in processes:
+        if proc.poll() is None:
+            proc.terminate()
             try:
-                proc.terminate()
                 proc.wait(timeout=1)
             except subprocess.TimeoutExpired:
                 proc.kill()
