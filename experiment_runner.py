@@ -143,7 +143,7 @@ def run_single_ring(n, initial_p, k):
         listener.join()
 
 
-def run_experiments(max_n=20, initial_p=0.5, k=5, step=4):
+def run_experiments(max_n=6, initial_p=0.5, k=5, step=4):
     results = []
     for n in range(2, max_n + 1, step):
         print(f"\nRunning experiment with n={n}...")

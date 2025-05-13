@@ -18,16 +18,25 @@ DEFAULT_PORT = 5000
 TOKEN_TIMEOUT = 30
 
 
-def send_token(next_host, next_port, token):
+def send_token(next_host, next_port, token, process_id):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     current_time = time.time()
     round_duration = max(0, current_time - token["timestamp"])
 
-    # Send the stats via multicast
-    message = json.dumps({"type": "round_time", "duration": round_duration})
-    sock.sendto(
-        message.encode(), (MULTICAST_GROUP_ROUND_TIMES, MULTICAST_PORT_ROUND_TIMES)
-    )
+    # Only one process, the process with ID 0 sends the round time
+    if process_id == 0:
+        message = json.dumps(
+            {
+                "type": "round_time",
+                "duration": round_duration,
+                "round": token["round"],
+                "sender": process_id,
+            }
+        )
+        sock.sendto(
+            message.encode(), (MULTICAST_GROUP_ROUND_TIMES, MULTICAST_PORT_ROUND_TIMES)
+        )
+
     token["timestamp"] = current_time
     sock.sendto(json.dumps(token).encode(), (next_host, next_port))
 
@@ -95,7 +104,7 @@ def main(args):
                 "silent_rounds": 0,
                 "sender": args.id,
             }
-            send_token(args.next_host, next_port, initial_token)
+            send_token(args.next_host, next_port, initial_token, args.id)
 
         while True:
             print(f"[Process {args.id}] Waiting to receive token...")
@@ -106,7 +115,7 @@ def main(args):
                 print(
                     f"[Process {args.id}] Received token with silent rounds >= k, terminating."
                 )
-                send_token(args.next_host, next_port, token)
+                send_token(args.next_host, next_port, token, args.id)
                 break
             total_rounds += 1
             print(f"[Process {args.id}] Received token in round {token['round']}")
@@ -130,11 +139,11 @@ def main(args):
                         f"[Process {args.id}] Terminating after {token['round']} rounds"
                     )
                     token["silent_rounds"] = ROUNDS_WITHOUT_FIREWORK
-                    send_token(args.next_host, next_port, token)
+                    send_token(args.next_host, next_port, token, args.id)
                     break
 
             time.sleep(0.1)
-            send_token(args.next_host, next_port, token)
+            send_token(args.next_host, next_port, token, args.id)
 
     finally:
         sock.close()
