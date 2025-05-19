@@ -7,13 +7,13 @@ from statistics import mean
 import sys
 import csv
 import select
+import os
 
 MULTICAST_GROUP_FIREWORKS = "224.0.0.1"
 MULTICAST_GROUP = "224.1.1.1"
 MULTICAST_PORT_FIREWORKS = 5007
 MULTICAST_PORT_ROUND_TIMES = 5008
 BASE_PORT = 6000
-MAX_WAIT_TIME = 60
 CSV_FILE = "experiment_results.csv"
 
 
@@ -50,6 +50,9 @@ def listen_for_stats(stop_event, round_times, multicast_count):
                     # Round time message
                     message = json.loads(message)
                     if message.get("type") == "round_time":
+                        print(
+                            f"Received round time: {message['duration']} in round {message['round']}"
+                        )
                         round_times.append(message["duration"])
                 else:
                     # Firework message
@@ -114,12 +117,23 @@ def run_single_ring(n, initial_p, k):
         token = {"round": 0, "silent_rounds": 0, "timestamp": time.time()}
         sock.sendto(json.dumps(token).encode(), ("localhost", BASE_PORT))
 
-        # Wait for completion
-        start_time = time.time()
+        # Wait for processes to start and collect round times. If we do not get a round time in 30 seconds, we assume an error occurred
+        # and terminate the processes.
+        last_round_time_count = 0
+        last_progress_time = time.time()
+        TIMEOUT_NO_PROGRESS = 120  # seconds
+
         while any(p.poll() is None for p in processes):
-            # If the processes take over 60 seconds, we assume an error occured
-            if time.time() - start_time > MAX_WAIT_TIME:
-                raise TimeoutError("Process ring took too long.")
+            current_count = len(round_times)
+            if current_count > last_round_time_count:
+                last_progress_time = time.time()
+                last_round_time_count = current_count
+
+            if time.time() - last_progress_time > TIMEOUT_NO_PROGRESS:
+                raise TimeoutError(
+                    "No progress (new round_times) detected in the last 30 seconds."
+                )
+
             time.sleep(1)
 
         stop_event.set()
@@ -143,9 +157,9 @@ def run_single_ring(n, initial_p, k):
         listener.join()
 
 
-def run_experiments(max_n=6, initial_p=0.5, k=5, step=4):
+def run_experiments(max_n=250, initial_p=0.5, k=5, step=50):
     results = []
-    for n in range(2, max_n + 1, step):
+    for n in range(94, max_n + 1, step):
         print(f"\nRunning experiment with n={n}...")
         try:
             stats = run_single_ring(n, initial_p, k)
@@ -175,11 +189,14 @@ def run_experiments(max_n=6, initial_p=0.5, k=5, step=4):
     max_success_n = results[-1]["n"] if results else 1
     print(f"\nMaximum successful n: {max_success_n}")
 
-    # Write results to CSV
     fieldnames = ["n", "rounds", "multicasts", "min_time", "max_time", "avg_time"]
-    with open(CSV_FILE, mode="w", newline="") as csvfile:
+    file_exists = os.path.exists(CSV_FILE)
+    write_header = not file_exists or os.stat(CSV_FILE).st_size == 0
+
+    with open(CSV_FILE, mode="a", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=";")
-        writer.writeheader()
+        if write_header:
+            writer.writeheader()
         for result in results:
             writer.writerow(
                 {

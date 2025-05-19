@@ -25,6 +25,9 @@ def send_token(next_host, next_port, token, process_id):
 
     # Only one process, the process with ID 0 sends the round time
     if process_id == 0:
+        print(
+            f"[Process 0] Sending round time: {round_duration} for round {token['round']}"
+        )
         message = json.dumps(
             {
                 "type": "round_time",
